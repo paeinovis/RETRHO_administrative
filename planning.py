@@ -41,8 +41,6 @@ Name = "Target name**"
 RA = "RA**"
 Dec = "Dec**"
 
-now = Time.now()
-now.to_datetime(timezone=RHO.timezone).isoformat()
 def eastern(time):
     est = time.to_datetime(timezone=RHO.timezone)
     
@@ -118,7 +116,7 @@ class MainWindow(QMainWindow):
         # SIMBAD shenanigans to get some relevant info and convert it to hmsdms bc SIMBAD doesn't do that natively anymore???
         info = [self.result_table["main_id"][0], self.coords.to_string('hmsdms'), self.result_table["V"][0]]
         
-        alt_az = self.coords.transform_to(AltAz(obstime=now, location=RHO.location))
+        alt_az = self.coords.transform_to(AltAz(obstime=self.now, location=RHO.location))
         str_alt = str(alt_az.alt)[1:-8] + "s"
         str_az = str(alt_az.az)[1:-8] + "s"
 
@@ -128,7 +126,7 @@ class MainWindow(QMainWindow):
         str_info += "Coordinates: " + str(info[1])[2:13] +", " + str(info[1])[22:33] + "\n"      # Cutting off the long decimal points for readibility w/o rounding - we don't need to be THAT precise for calib stars
         str_info += "Magnitude V: " + str(round(float(info[2]), 5)) + "\n"
         try: 
-            rise_set = [eastern(RHO.target_rise_time(time=now, target=self.current_target)), eastern(RHO.target_set_time(time=now, target=self.current_target))]
+            rise_set = [eastern(RHO.target_rise_time(time=self.now, target=self.current_target)), eastern(RHO.target_set_time(time=self.now, target=self.current_target))]
             str_info += "Rises: " + rise_set[0] + " EST" + "\n"
             str_info += "Sets: " + rise_set[1] + " EST" + "\n"
         except (TargetAlwaysUpWarning, TargetNeverUpWarning, AttributeError):
@@ -136,7 +134,7 @@ class MainWindow(QMainWindow):
             str_info += "Sets: Does not set\n"
         str_info += "Altitude: " + str_alt + "\n"
         str_info += "Azimuth: " + str_az + "\n"
-        str_info += "Up now: " + str(RHO.target_is_up(now, self.current_target))[1:-1]
+        str_info += "Up now: " + str(RHO.target_is_up(self.now, self.current_target))[1:-1]
         
         # Set label as the string info
         self.coord_info.setText(str_info)

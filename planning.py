@@ -101,7 +101,7 @@ class MainWindow(QMainWindow):
         self.tab1.label_info = QLabel()
         self.tab1.label_info.setGeometry(200, 200, 200, 30)
 
-        self.tab1.targets_dropdown_button = QPushButton("Go")
+        self.tab1.targets_dropdown_button = QPushButton("Get info")
         self.tab1.targets_dropdown_button.clicked.connect(lambda: self.get_info_of_obj(self.tab1))
 
         self.tab1.figure = plt.figure()
@@ -118,7 +118,6 @@ class MainWindow(QMainWindow):
         self.tab1.layout.addWidget(self.tab1.canvas)
         self.tab1.setLayout(self.tab1.layout)
         
-
         # Tab 2 objects: 
 
         # Init tab 2 values:
@@ -126,18 +125,18 @@ class MainWindow(QMainWindow):
         self.tab2.current_target_name = None
         self.tab2.coords = None
         self.tab2.result_table = None   
+        self.tab2.figure = None
+        self.tab2.canvas = None
 
         self.tab2.target_list = [] 
         self.tab2.targets = []
         self.tab2.targets_dropdown = QComboBox()
         self.tab2.targets_dropdown.addItems(self.tab2.targets)
-        # self.tab2.targets_dropdown.setEditable(True)
-        # self.tab2.targets_dropdown.setInsertPolicy(QComboBox.NoInsert)
 
         self.tab2.label_info = QLabel()
         self.tab2.label_info.setGeometry(200, 200, 200, 30)
 
-        self.tab2.targets_dropdown_button = QPushButton("Go")
+        self.tab2.targets_dropdown_button = QPushButton("Get info")
         self.tab2.targets_dropdown_button.clicked.connect(lambda: self.get_info_of_obj(self.tab2))
 
         self.tab2.plot_button = QPushButton("Plot")
@@ -202,8 +201,10 @@ class MainWindow(QMainWindow):
         if self.update(tab) is False:
             return
         now = Time.now()
-        if tab.figure is not None:
-            tab.figure.clear()
+        if self.tab1.figure is not None:
+            self.tab1.figure.clear()
+        if self.tab2.figure is not None:
+            self.tab2.figure.clear()
         ax, hdu = plot_finder_image(tab.current_target, fov_radius=15*u.arcmin)
         wcs = WCS(hdu.header)
         title = "Finder image for " + tab.current_target_name
@@ -245,7 +246,7 @@ class MainWindow(QMainWindow):
     def open_file_dialog(self):                       # Function from https://pythonspot.com/pyqt5-file-dialog/
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
-        file_name, _ = QFileDialog.getOpenFileName(self,"QFileDialog.getOpenFileName()", "","CSV Files (*.csv)", options=options)
+        file_name, _ = QFileDialog.getOpenFileName(self,"Choose target list file", "","CSV Files (*.csv)", options=options)
         if file_name:
             self.sheet = pandas.read_csv(file_name)
             self.sheet = self.sheet[self.sheet[RA].str.contains("nan") == False]           # Gets rid of blank rows
@@ -266,6 +267,7 @@ class MainWindow(QMainWindow):
             self.update(self.tab2)
             self.tab2.targets_dropdown.clear()       
             self.tab2.targets_dropdown.addItems(self.tab2.targets)
+            # Inits figure and canvas here because otherwise matplotlib gets mad
             self.tab2.figure = plt.figure()
             self.tab2.canvas = FigureCanvas(self.tab2.figure)
             self.tab2.layout.addWidget(self.tab2.canvas)

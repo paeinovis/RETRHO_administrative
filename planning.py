@@ -76,9 +76,9 @@ class MainWindow(QMainWindow):
         self.tab1 = QWidget()
         self.tab2 = QWidget()
         self.tab3 = QWidget()
-        self.tabs.addTab(self.tab1, "Alignment stars")
+        self.tabs.addTab(self.tab1, "Stars from name")
         self.tabs.addTab(self.tab2, "Objects from file")
-        self.tabs.addTab(self.tab3, "Edit values")
+        self.tabs.addTab(self.tab3, "Custom values")
 
         self.init_tab_one()
         self.init_tab_two()

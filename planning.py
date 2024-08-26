@@ -45,7 +45,6 @@ DEC = "Dec**"
 
 def eastern(time):
     est = time.to_datetime(timezone=RHO.timezone)
-    
     return est.strftime('%H:%M:%S')
 
 # Determines which objects are above horizon
@@ -101,7 +100,6 @@ class MainWindow(QMainWindow):
         info = "Name:\nIdentifier:\nUp now:\n\nCoordinates:\nMagnitude V:\n\nRises:\nSets:\n\nAltitude:\nAzimuth:"
         self.tab1.label_info.setText(info)       
 
-
     # Get info of object and print to label
     def get_info_of_obj(self, tab):
         if tab.target_names is not None:
@@ -116,25 +114,26 @@ class MainWindow(QMainWindow):
         
         tab.result_table = result_table
         now = Time.now()
+
         # SIMBAD shenanigans to get some relevant info and convert it to hmsdms bc SIMBAD doesn't do that natively anymore???
         info = [tab.result_table["main_id"][0], tab.coords.to_string('hmsdms'), tab.result_table["V"][0]]
 
-        # Cutting off the long decimal points for readibility w/o rounding - we don't need to be THAT precise for calib stars
+        # Cutting off the long decimal points for readibility w/o rounding - we don't need to be That precise
         if "." in str(info[1]) and " " in str(info[1]):
             coords_str = str(info[1]).split(".")
             coords_2 = coords_str[1].split(" ")
             coords_ra = coords_str[0][2:] + "." + coords_2[0][:2] + "s"
             coords_dec = coords_2[1][:] + "." + coords_str[2][:2] + "s"
-        else:                        # In the unlikely event they're not separated in the way I'm expecting .
+        # In the unlikely event they're not separated in the way I'm expecting .
+        else:                        
             coords_ra = result_table["ra"]
             coords_dec = result_table["dec"]
 
-        up_now = str(RHO.target_is_up(now, tab.current_target))
         # Idk what to say abt this, sometimes the true/false comes like [True] and other times it comes like True. I don't get it .
+        up_now = str(RHO.target_is_up(now, tab.current_target))
         if "[" in up_now:
             up_now = up_now.split("[")[1]
-            if "]" in up_now:
-                up_now = up_now.split("]")[0]
+            up_now = up_now.split("]")[0]
 
         alt_az = tab.coords.transform_to(AltAz(obstime=now, location=RHO.location))
         str_alt = str(alt_az.alt)[1:-8] + "s"
@@ -491,7 +490,7 @@ app.exec_()
 
 
 
-# Authors: Triana Almeyda, Cassidy Camera, Hannah Luft, Pae Swanson
+# Authors: Pae Swanson, Triana Almeyda, Cassidy Camera, Hannah Luft
 
 # References used (mostly for pyqt tbh):
 # https://www.pythonguis.com/docs/qcombobox/

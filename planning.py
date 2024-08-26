@@ -49,19 +49,20 @@ def eastern(time):
     return est.strftime('%H:%M:%S')
 
 # Determines which objects are above horizon
-def determine_up(list_objects):
+def determine_up(targets, obj_names):
     now = Time.now()                                # Update time
     new_list = []                                   # List of objects with up info
+    index = 0
 
-    for obj in list_objects:
-        try:
-            curr_target = FixedTarget(coordinates.SkyCoord.from_name(obj), name=obj)
-        except(NameResolveError):
-            continue
-        if RHO.target_is_up(now, curr_target):
-            new_list.append(obj + " (Up)")       # So user can see if a given object is in the sky
+    for obj in targets:
+        obj_name = obj_names[index]
+        if "(Up)" in obj_name:                        # Cuts off the (Up) part of the name if the star is indeed up
+            obj_name = obj_name[0:-5]
+        if RHO.target_is_up(now, obj):
+            new_list.append(obj_name + " (Up)")       # So user can see if a given object is in the sky
         else:
-            new_list.append(obj)
+            new_list.append(obj_name)
+        index += 1
     return new_list
 
 class MainWindow(QMainWindow):
@@ -80,11 +81,6 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.tab2, "Objects from file")
         self.tabs.addTab(self.tab3, "Custom values")
 
-        self.init_tab_one()
-        self.init_tab_two()
-        self.init_tab_three()
-
-
         # Overall window stuff
         container = QWidget()
         self.setCentralWidget(container)
@@ -97,20 +93,49 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(width, height) 
 
         # Init
-        self.get_info_of_obj(self.tab1)
+        self.init_tab_one()
+        self.init_tab_two()
+        self.init_tab_three()
+        self.fov = 15*u.arcmin
+
         info = "Name:\nIdentifier:\nUp now:\n\nCoordinates:\nMagnitude V:\n\nRises:\nSets:\n\nAltitude:\nAzimuth:"
-        self.tab1.label_info.setText(info)
+        self.tab1.label_info.setText(info)       
 
 
     # Get info of object and print to label
     def get_info_of_obj(self, tab):
-        if self.update(tab) is False:
+        if tab.target_names is not None:
+            self.update(tab)
+
+        try: 
+            result_table = Simbad.query_object(tab.current_target_name)[["main_id", "ra", "dec", "V"]]
+            tab.coords = SkyCoord(ra=result_table["ra"], dec=result_table["dec"])
+        except (NoResultsWarning, NameResolveError, DALFormatError, DALAccessError, DALServiceError, DALQueryError, AttributeError):
             tab.label_info.setText("Object not found. Check spelling and try again.")
             return
+        
+        tab.result_table = result_table
         now = Time.now()
         # SIMBAD shenanigans to get some relevant info and convert it to hmsdms bc SIMBAD doesn't do that natively anymore???
         info = [tab.result_table["main_id"][0], tab.coords.to_string('hmsdms'), tab.result_table["V"][0]]
-        
+
+        # Cutting off the long decimal points for readibility w/o rounding - we don't need to be THAT precise for calib stars
+        if "." in str(info[1]) and " " in str(info[1]):
+            coords_str = str(info[1]).split(".")
+            coords_2 = coords_str[1].split(" ")
+            coords_ra = coords_str[0][2:] + "." + coords_2[0][:2] + "s"
+            coords_dec = coords_2[1][:] + "." + coords_str[2][:2] + "s"
+        else:                        # In the unlikely event they're not separated in the way I'm expecting .
+            coords_ra = result_table["ra"]
+            coords_dec = result_table["dec"]
+
+        up_now = str(RHO.target_is_up(now, tab.current_target))
+        # Idk what to say abt this, sometimes the true/false comes like [True] and other times it comes like True. I don't get it .
+        if "[" in up_now:
+            up_now = up_now.split("[")[1]
+            if "]" in up_now:
+                up_now = up_now.split("]")[0]
+
         alt_az = tab.coords.transform_to(AltAz(obstime=now, location=RHO.location))
         str_alt = str(alt_az.alt)[1:-8] + "s"
         str_az = str(alt_az.az)[1:-8] + "s"
@@ -119,8 +144,8 @@ class MainWindow(QMainWindow):
         str_info = ""
         str_info += "Name: " + tab.current_target_name + "\n"
         str_info += "Identifier: " + info[0] + "\n"
-        str_info += "Up now: " + str(RHO.target_is_up(now, tab.current_target))[1:-1] + "\n\n"
-        str_info += "Coordinates: " + str(info[1])[2:13] +", " + str(info[1])[22:33] + "\n"      # Cutting off the long decimal points for readibility w/o rounding - we don't need to be THAT precise for calib stars
+        str_info += "Up now: " + up_now + "\n\n"
+        str_info += "Coordinates: " + coords_ra + ", " + coords_dec + "\n"      
         str_info += "Magnitude V: " + str(round(float(info[2]), 5)) + "\n\n"
         try: 
             rise_set = [eastern(RHO.target_rise_time(time=now, target=tab.current_target)), eastern(RHO.target_set_time(time=now, target=tab.current_target))]
@@ -137,9 +162,15 @@ class MainWindow(QMainWindow):
     
     # Plot finder image    
     def plot(self, tab):
-        if self.update(tab) is False:
+        if tab.target_names is not None:
+            self.update(tab)
+
+        try: 
+            result_table = Simbad.query_object(tab.current_target_name)[["main_id", "ra", "dec", "V"]]
+        except (NoResultsWarning, NameResolveError, DALFormatError, DALAccessError, DALServiceError, DALQueryError):
             tab.label_info.setText("Object not found. Check spelling and try again.")
             return
+        
         now = Time.now()
         figure = plt.figure()
         canvas = FigureCanvas(figure)
@@ -152,31 +183,61 @@ class MainWindow(QMainWindow):
         canvas.setWindowTitle(title)
         canvas.show();
 
+    # # Plot airmass
+    # def plot_airmass(self, tab):
+    #     if self.update(tab) is False:
+    #         tab.label_info.setText("Object not found. Check spelling and try again.")
+    #         return
+    #     now = Time.now()
+    #     figure = plt.figure()
+    #     canvas = FigureCanvas(figure)
+    #     time_range = now + TimeDelta(range(0, 24*60, 10)*u.minute)
+    #     fig, ax = plt.subplots(figsize=(8, 6))
+    #     plot_airmass(tab.current_target, observer=RHO, time=time_range, brightness_shading=True, ax=ax)
+    #     title = "Airmass plot for " + tab.current_target_name + " (FOV = " + str(self.fov) + ")"
+    #     ax.set_title(title)
+    #     title = tab.current_target_name + " Airmass Plot"
+    #     canvas.setWindowTitle(title)
+    #     canvas.show();
+
     # Check input to ensure Valid
     def update(self, tab):
-        now = Time.now()                                # Update time
         name = tab.targets_dropdown.currentText()
-
+        if name in tab.target_names:
+            index_of_name = tab.target_names.index(name)
         if "(Up)" in name:              # Cuts off the (Up) part of the name if the star is indeed up, so SIMBAD can query
             name = name[0:-5]
-
-        result_table = None
-
-        try: 
-            result_table = Simbad.query_object(name)[["main_id", "ra", "dec", "V"]]
-        except (NoResultsWarning, NameResolveError, DALFormatError, DALAccessError, DALServiceError, DALQueryError):
-            return False
-
-        tab.result_table = result_table
+        tab.target_names = determine_up(tab.targets, tab.target_names)
         tab.current_target_name = name
-        tab.coords = SkyCoord(ra=result_table["ra"], dec=tab.result_table["dec"])
-        tab.current_target = FixedTarget(tab.coords, name=name)
 
-        if name not in tab.target_list and name not in tab.targets:
-            tab.target_list.insert(0, name)
+        if tab is self.tab2:
+            tab.current_target = tab.targets[index_of_name]
+            tab.coords = SkyCoord(ra=tab.current_target.ra, dec=tab.current_target.dec)
+            tab.targets_dropdown.clear()       
+            tab.targets_dropdown.addItems(tab.target_names)
+            now = Time.now()                                # Update time
+            if RHO.target_is_up(now, tab.current_target):
+                name = name + " (Up)"      
+            tab.targets_dropdown.setCurrentText(name)
+            return
+        
+        try: 
+            result_table = Simbad.query_object(tab.current_target_name)[["main_id", "ra", "dec", "V"]]
+            tab.result_table = result_table
+            tab.coords = SkyCoord(ra=result_table["ra"], dec=tab.result_table["dec"])
+        except (NoResultsWarning, NameResolveError, DALFormatError, DALAccessError, DALServiceError, DALQueryError, AttributeError):
+            pass
+
+        if name not in tab.target_names:
+            tab.current_target = FixedTarget(tab.coords, name=name)
+            tab.targets.append(tab.current_target)
+            now = Time.now()                                # Update time
+            if RHO.target_is_up(now, tab.current_target):
+                name = name + " (Up)"      
+            tab.target_names.insert(0, name)
 
         tab.targets_dropdown.clear()       
-        tab.targets_dropdown.addItems(tab.targets)
+        tab.targets_dropdown.addItems(tab.target_names)
         tab.targets_dropdown.setCurrentText(name)
 
     # Open csv file 
@@ -188,22 +249,27 @@ class MainWindow(QMainWindow):
             self.sheet = pandas.read_csv(file_name)
             self.sheet = self.sheet[self.sheet[RA].str.contains("nan") == False]           # Gets rid of blank rows
             self.tab2.targets = []
-            self.tab2.target_list = []
+            self.tab2.target_names = []
             msg = "Successfully parsed file."
             for i in range(2, len(self.sheet)):
                 try: 
-                    name = self.sheet[NAME][i];
+                    name = self.sheet[NAME][i]
                     curr_target = FixedTarget(coordinates.SkyCoord.from_name(name), name=name)
-                    self.tab2.targets.append(name)
-                    self.tab2.target_list.append(name)
+                    self.tab2.targets.append(curr_target)
+                    self.tab2.target_names.append(name)
                 except (NoResultsWarning, ValueError, TypeError):
-                    msg = "Error parsing file. Please check template and spelling of targets."
+                    msg = "Error parsing file. Please check template of submitted sheet."
                 except (NameResolveError):
-                    msg = "Some objects could not be resolved and will not be displayed in the dropdown."
+                    name = self.sheet[NAME][i] 
+                    curr_coords = self.sheet[RA][i] + " " + self.sheet[DEC][i]
+                    curr_coords = SkyCoord(curr_coords, unit=(u.hour, u.deg), frame='icrs')
+                    curr_target = FixedTarget(curr_coords, name=name)
+                    self.tab2.targets.append(curr_target)
+                    self.tab2.target_names.append(name)
             self.tab2.label_info.setText(msg)
-            self.update(self.tab2)
+            self.tab2.target_names = determine_up(self.tab2.targets, self.tab2.target_names)
             self.tab2.targets_dropdown.clear()       
-            self.tab2.targets_dropdown.addItems(self.tab2.targets)
+            self.tab2.targets_dropdown.addItems(self.tab2.target_names)
         else:
             self.sheet = None
 
@@ -233,7 +299,7 @@ class MainWindow(QMainWindow):
             pass
         self.tab3.label_info.setText(update)
 
-    # Change dec to user input
+    # Change Dec to user input
     def change_dec(self):
         update = "Dec could NOT be updated.\nEnsure that the value entered matches the format."
         try:
@@ -248,39 +314,58 @@ class MainWindow(QMainWindow):
         self.tab3.label_info.setText(update)
 
     # Plot finder image based on coordinates
-    def plot_coords(self):
+    def plot_coords(self, tab):
+        if tab is self.tab3:
+            if tab.target_names is not None:
+                self.update(tab)
+            title = "Finder image from coordinates (FOV = " + str(self.fov) + ")"
+            title_2 = "Plot From Coordinates"
+        elif tab is self.tab2:
+            title = "Finder image for " + tab.current_target_name + " (FOV = " + str(self.fov) + ")"
+            title_2 = tab.current_target_name + " Plot"
         now = Time.now()
         figure = plt.figure()
         canvas = FigureCanvas(figure)
         ax, hdu = plot_finder_image(self.tab3.coords, fov_radius=self.fov);
         wcs = WCS(hdu.header)
-        title = "Finder image from coordinates (FOV = " + str(self.fov) + ")"
         ax.set_title(title)
         figure.add_subplot(ax, projection=wcs)
-        title = "Plot from Coordinates"
-        canvas.setWindowTitle(title)
+        canvas.setWindowTitle(title_2)
         canvas.show();
-
 
     def init_tab_one(self):
         # Tab 1 objects:
 
         # Init tab 1 values:
-        self.tab1.current_target = None
-        self.tab1.current_target_name = None
-        self.tab1.coords = None
-        self.tab1.result_table = None        
+        self.tab1.coords = SkyCoord("00:00:00 00:00:00", unit=(u.hour, u.deg), frame='icrs')
+        self.tab1.current_target = FixedTarget(self.tab1.coords, name="Default Coordinates Plot")
+        self.tab1.current_target_name = "Default"
 
         # List of possible alignment stars - can be changed if desired. 
         # Currently organized by brightest mag V to dimmest
-        self.tab1.target_list = ['Antares', 'Arcturus', 'Vega', 'Capella', 'Procyon', 
+        temp_target_names = ['Antares', 'Arcturus', 'Vega', 'Capella', 'Procyon', 
                             'Altair', 'Aldebaran', 'Spica', 'Fomalhaut', 'Deneb', 
                             'Regulus', 'Dubhe', 'Mirfak', 'Polaris', 'Schedar']
+        self.tab1.target_names = []
+        self.tab1.targets = []
+
+        now = Time.now()
+        for star in temp_target_names:
+            try:
+                curr_target = FixedTarget(coordinates.SkyCoord.from_name(star), name=star)
+            except(NameResolveError):
+                continue
+            if RHO.target_is_up(now, curr_target):
+                self.tab1.target_names.append(star + " (Up)")       # So user can see if a given object is in the sky
+                self.tab1.targets.append(curr_target)
+            else:
+                self.tab1.target_names.append(star)
+                self.tab1.targets.append(curr_target)
+
 
         # Widgets
         self.tab1.targets_dropdown = QComboBox()
-        self.tab1.targets = determine_up(self.tab1.target_list)
-        self.tab1.targets_dropdown.addItems(self.tab1.targets)
+        self.tab1.targets_dropdown.addItems(self.tab1.target_names)
         self.tab1.targets_dropdown.setEditable(True)
         self.tab1.targets_dropdown.setInsertPolicy(QComboBox.InsertAtTop)
 
@@ -293,27 +378,31 @@ class MainWindow(QMainWindow):
         self.tab1.plot_button = QPushButton("Plot")
         self.tab1.plot_button.clicked.connect(lambda: self.plot(self.tab1))
 
+        # self.tab1.plot_airmass_button = QPushButton("Plot airmass")
+        # self.tab1.plot_airmass_button.clicked.connect(lambda: self.plot_airmass(self.tab1))
+
         # Entire tab
         self.tab1.layout = QVBoxLayout()
         self.tab1.layout.addWidget(self.tab1.targets_dropdown)
         self.tab1.layout.addWidget(self.tab1.targets_dropdown_button)
         self.tab1.layout.addWidget(self.tab1.label_info)
         self.tab1.layout.addWidget(self.tab1.plot_button)
+        # self.tab1.layout.addWidget(self.tab1.plot_airmass_button)
         self.tab1.setLayout(self.tab1.layout)
         
     def init_tab_two(self):
-                # Tab 2 objects: 
+        # Tab 2 objects: 
 
         # Init tab 2 values:
-        self.tab2.current_target = None
-        self.tab2.current_target_name = None
-        self.tab2.coords = None
+        self.tab2.coords = SkyCoord("00:00:00.00 00:00:00.00", unit=(u.hour, u.deg), frame='icrs')
+        self.tab2.current_target = FixedTarget(self.tab2.coords, name="Default Coordinates Plot")
+        self.tab2.current_target_name = "Default"
         self.tab2.result_table = None   
 
-        self.tab2.target_list = [] 
+        self.tab2.target_names = [] 
         self.tab2.targets = []
         self.tab2.targets_dropdown = QComboBox()
-        self.tab2.targets_dropdown.addItems(self.tab2.targets)
+        self.tab2.targets_dropdown.addItems(self.tab2.target_names)
 
         # Widgets
         self.tab2.label_info = QLabel()
@@ -323,7 +412,10 @@ class MainWindow(QMainWindow):
         self.tab2.targets_dropdown_button.clicked.connect(lambda: self.get_info_of_obj(self.tab2))
 
         self.tab2.plot_button = QPushButton("Plot")
-        self.tab2.plot_button.clicked.connect(lambda: self.plot(self.tab2))
+        self.tab2.plot_button.clicked.connect(lambda: self.plot_coords(self.tab2))
+
+        # self.tab2.plot_airmass_button = QPushButton("Plot airmass")
+        # self.tab2.plot_airmass_button.clicked.connect(lambda: self.plot_airmass(self.tab2))
 
         self.tab2.file_upload_button = QPushButton("Upload file")
         self.tab2.file_upload_button.clicked.connect(self.open_file_dialog)
@@ -335,18 +427,18 @@ class MainWindow(QMainWindow):
         self.tab2.layout.addWidget(self.tab2.targets_dropdown_button)
         self.tab2.layout.addWidget(self.tab2.label_info)
         self.tab2.layout.addWidget(self.tab2.plot_button)
-
+        # self.tab2.layout.addWidget(self.tab2.plot_airmass_button)
         self.tab2.setLayout(self.tab2.layout)
     
     def init_tab_three(self):
         # Tab 3 objects:
 
         # Init tab 3 values:
-        self.fov = 15*u.arcmin
-        self.tab3.ra = "00:00:00"
-        self.tab3.dec = "00:00:00"
+        self.tab3.ra = "00:00:00.00"
+        self.tab3.dec = "00:00:00.00"
         temp_coords = self.tab3.ra + " " + self.tab3.dec
         self.tab3.coords = SkyCoord(temp_coords, unit=(u.hour, u.deg), frame='icrs')
+        self.tab3.current_target = FixedTarget(self.tab3.coords, name="Default Coordinates Plot")
 
         # Widgets
         self.tab3.fov_input = QLineEdit()
@@ -358,15 +450,15 @@ class MainWindow(QMainWindow):
         self.tab3.fov_input_button.clicked.connect(self.change_fov)
 
         self.tab3.ra_input = QLineEdit()
-        self.tab3.ra_input_button = QPushButton("Change RA in hh:mm:ss or hh mm ss")
+        self.tab3.ra_input_button = QPushButton("Change RA in hh:mm:ss or hh mm ss.")
         self.tab3.ra_input_button.clicked.connect(self.change_ra)
 
         self.tab3.dec_input = QLineEdit()
-        self.tab3.dec_input_button = QPushButton("Change dec in deg:mm:ss or deg mm ss")
+        self.tab3.dec_input_button = QPushButton("Change dec in deg:mm:ss or deg mm ss.")
         self.tab3.dec_input_button.clicked.connect(self.change_dec)
 
         self.tab3.plot_button = QPushButton("Plot")
-        self.tab3.plot_button.clicked.connect(self.plot_coords)
+        self.tab3.plot_button.clicked.connect(lambda: self.plot_coords(self.tab3))
 
         # Entire tab
         self.tab3.layout = QVBoxLayout()

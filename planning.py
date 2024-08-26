@@ -105,8 +105,8 @@ class MainWindow(QMainWindow):
     # Get info of object and print to label
     def get_info_of_obj(self, tab):
         if tab.target_names is not None:
-            self.update(tab)
-
+            if not self.update(tab):
+                return
         try: 
             result_table = Simbad.query_object(tab.current_target_name)[["main_id", "ra", "dec", "V"]]
             tab.coords = SkyCoord(ra=result_table["ra"], dec=result_table["dec"])
@@ -200,9 +200,13 @@ class MainWindow(QMainWindow):
     #     canvas.setWindowTitle(title)
     #     canvas.show();
 
-    # Check input to ensure Valid
+    # Update values of dropdown menu
     def update(self, tab):
         name = tab.targets_dropdown.currentText()
+        if name == '':
+            tab.label_info.setText("Could not complete action. Ensure a target is uploaded and selected.")
+            return False
+        
         if name in tab.target_names:
             index_of_name = tab.target_names.index(name)
         if "(Up)" in name:              # Cuts off the (Up) part of the name if the star is indeed up, so SIMBAD can query
@@ -219,7 +223,7 @@ class MainWindow(QMainWindow):
             if RHO.target_is_up(now, tab.current_target):
                 name = name + " (Up)"      
             tab.targets_dropdown.setCurrentText(name)
-            return
+            return True
         
         try: 
             result_table = Simbad.query_object(tab.current_target_name)[["main_id", "ra", "dec", "V"]]
@@ -239,6 +243,7 @@ class MainWindow(QMainWindow):
         tab.targets_dropdown.clear()       
         tab.targets_dropdown.addItems(tab.target_names)
         tab.targets_dropdown.setCurrentText(name)
+        return True
 
     # Open csv file 
     def open_file_dialog(self):                       # Function from https://pythonspot.com/pyqt5-file-dialog/
@@ -316,17 +321,20 @@ class MainWindow(QMainWindow):
     # Plot finder image based on coordinates
     def plot_coords(self, tab):
         if tab is self.tab3:
-            if tab.target_names is not None:
-                self.update(tab)
             title = "Finder image from coordinates (FOV = " + str(self.fov) + ")"
             title_2 = "Plot From Coordinates"
         elif tab is self.tab2:
+            name = tab.targets_dropdown.currentText()
+            if name == '':
+                tab.label_info.setText("Could not complete action. Ensure a target is uploaded and selected.")
+                return False
+            self.update(tab)
             title = "Finder image for " + tab.current_target_name + " (FOV = " + str(self.fov) + ")"
             title_2 = tab.current_target_name + " Plot"
         now = Time.now()
         figure = plt.figure()
         canvas = FigureCanvas(figure)
-        ax, hdu = plot_finder_image(self.tab3.coords, fov_radius=self.fov);
+        ax, hdu = plot_finder_image(tab.coords, fov_radius=self.fov);
         wcs = WCS(hdu.header)
         ax.set_title(title)
         figure.add_subplot(ax, projection=wcs)
@@ -337,7 +345,7 @@ class MainWindow(QMainWindow):
         # Tab 1 objects:
 
         # Init tab 1 values:
-        self.tab1.coords = SkyCoord("00:00:00 00:00:00", unit=(u.hour, u.deg), frame='icrs')
+        self.tab1.coords = SkyCoord("00:00:00.00 00:00:00.00", unit=(u.hour, u.deg), frame='icrs')
         self.tab1.current_target = FixedTarget(self.tab1.coords, name="Default Coordinates Plot")
         self.tab1.current_target_name = "Default"
 

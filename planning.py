@@ -39,7 +39,7 @@ RHO = Observer(
 
 Simbad.add_votable_fields("U", "V", "B")
 
-NAME = "Target name**"
+NAME = "Primary Identifier**"
 RA = "RA**"
 DEC = "Dec**"
 
@@ -228,16 +228,15 @@ class MainWindow(QMainWindow):
             result_table = Simbad.query_object(tab.current_target_name)[["main_id", "ra", "dec", "V"]]
             tab.result_table = result_table
             tab.coords = SkyCoord(ra=result_table["ra"], dec=tab.result_table["dec"])
+            if name not in tab.target_names:
+                tab.current_target = FixedTarget(tab.coords, name=name)
+                tab.targets.append(tab.current_target)
+                now = Time.now()                                # Update time
+                if RHO.target_is_up(now, tab.current_target):
+                    name = name + " (Up)"      
+                tab.target_names.insert(0, name)
         except (NoResultsWarning, NameResolveError, DALFormatError, DALAccessError, DALServiceError, DALQueryError, AttributeError):
             pass
-
-        if name not in tab.target_names:
-            tab.current_target = FixedTarget(tab.coords, name=name)
-            tab.targets.append(tab.current_target)
-            now = Time.now()                                # Update time
-            if RHO.target_is_up(now, tab.current_target):
-                name = name + " (Up)"      
-            tab.target_names.insert(0, name)
 
         tab.targets_dropdown.clear()       
         tab.targets_dropdown.addItems(tab.target_names)
@@ -294,8 +293,9 @@ class MainWindow(QMainWindow):
         update = "RA could NOT be updated.\nEnsure that the value entered matches the format."
         try:
             new_ra = self.tab3.ra_input.text()
-            coord_str = str(new_ra) + " " + str(self.tab3.dec)
-            new_coords = SkyCoord(coord_str, unit=(u.hour, u.deg), frame='icrs')
+            coord_str_1 = str(new_ra) 
+            coord_str_2 = str(self.tab3.dec)
+            new_coords = SkyCoord(coord_str_1, coord_str_2, unit=(u.hour, u.deg), frame='icrs')
             self.tab3.coords = new_coords
             self.tab3.ra = new_ra
             update = "Successfully updated RA to " + str(self.tab3.ra) + ".\nCoordinates are now " + self.tab3.coords.to_string(style="hmsdms", sep=":", precision=1) + "."
@@ -308,8 +308,9 @@ class MainWindow(QMainWindow):
         update = "Dec could NOT be updated.\nEnsure that the value entered matches the format."
         try:
             new_dec = self.tab3.dec_input.text()
-            coord_str = str(self.tab3.ra) + " " + str(new_dec)
-            new_coords = SkyCoord(coord_str, unit=(u.hour, u.deg), frame='icrs')
+            coord_str_1 = str(self.tab3.ra) 
+            coord_str_2 = str(new_dec)
+            new_coords = SkyCoord(coord_str_1, coord_str_2, unit=(u.hour, u.deg), frame='icrs')
             self.tab3.coords = new_coords
             self.tab3.dec = new_dec
             update = "Successfully updated Dec to " + str(self.tab3.dec) + ".\nCoordinates are now " + self.tab3.coords.to_string(style="hmsdms", sep=":", precision=1) + "."
@@ -350,9 +351,10 @@ class MainWindow(QMainWindow):
 
         # List of possible alignment stars - can be changed if desired. 
         # Currently organized by brightest mag V to dimmest
-        temp_target_names = ['Antares', 'Arcturus', 'Vega', 'Capella', 'Procyon', 
+        temp_target_names = ['Antares', 'Arcturus', 'Vega', 'Capella', 'Procyon',
                             'Altair', 'Aldebaran', 'Spica', 'Fomalhaut', 'Deneb', 
-                            'Regulus', 'Dubhe', 'Mirfak', 'Polaris', 'Schedar']
+                            'Regulus', 'Dubhe', 'Mirfak', 'Polaris', 'Schedar',
+                            'Kappa Oph', '* b03 Cyg' '* g Her', '* 49 Cas']
         self.tab1.target_names = []
         self.tab1.targets = []
 
@@ -461,7 +463,7 @@ class MainWindow(QMainWindow):
         self.tab3.ra_input_button.clicked.connect(self.change_ra)
 
         self.tab3.dec_input = QLineEdit()
-        self.tab3.dec_input_button = QPushButton("Change dec in deg:mm:ss or deg mm ss.")
+        self.tab3.dec_input_button = QPushButton("Change Dec in deg:mm:ss or deg mm ss.")
         self.tab3.dec_input_button.clicked.connect(self.change_dec)
 
         self.tab3.plot_button = QPushButton("Plot")

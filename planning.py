@@ -189,8 +189,11 @@ class MainWindow(QMainWindow):
     def airmass_plot(self, tab):        
         now = Time.now()
         figure = plt.figure(figsize=(8, 6))
-        ax = plot_airmass(tab.current_target, RHO, now)
-        # Genuinely idk why I can't do things normally here e.g. can't do brightness_shading=True without it running into a conversion error but. whatever.
+        ax = plot_airmass(tab.current_target, 
+                          observer=RHO, 
+                          time=now.to_datetime(timezone=RHO.timezone), 
+                          use_local_tz=True,
+                          brightness_shading=True)
         title = "Airmass plot for " + tab.current_target_name
         ax.set_title(title)
         figure.add_subplot(ax)
@@ -200,7 +203,7 @@ class MainWindow(QMainWindow):
         canvas.show();
 
         
-    # Update values of dropdown menu
+    # Update dropdown menu stuff if needed
     def update(self, tab):
         name = tab.targets_dropdown.currentText()
         if name == '':
@@ -381,7 +384,7 @@ class MainWindow(QMainWindow):
         self.tab1.label_info = QLabel()
         self.tab1.label_info.setGeometry(200, 200, 200, 30)
 
-        self.tab1.targets_dropdown_button = QPushButton("Get info")
+        self.tab1.targets_dropdown_button = QPushButton("Go")
         self.tab1.targets_dropdown_button.clicked.connect(lambda: self.get_info_of_obj(self.tab1))
 
         self.tab1.plot_button = QPushButton("Plot")
@@ -399,8 +402,8 @@ class MainWindow(QMainWindow):
         self.tab1.layout.addWidget(self.tab1.targets_dropdown_button)
         self.tab1.layout.addWidget(self.tab1.label_info)
         self.tab1.layout.addWidget(self.tab1.plot_button)
-        self.tab1.layout.addWidget(self.tab1.update_button)
         self.tab1.layout.addWidget(self.tab1.plot_airmass_button)
+        self.tab1.layout.addWidget(self.tab1.update_button)
         self.tab1.setLayout(self.tab1.layout)
         
     def init_tab_two(self):
@@ -421,7 +424,7 @@ class MainWindow(QMainWindow):
         self.tab2.label_info = QLabel()
         self.tab2.label_info.setGeometry(200, 200, 200, 30)
 
-        self.tab2.targets_dropdown_button = QPushButton("Get info")
+        self.tab2.targets_dropdown_button = QPushButton("Go")
         self.tab2.targets_dropdown_button.clicked.connect(lambda: self.get_info_of_obj(self.tab2))
 
         self.tab2.plot_button = QPushButton("Plot")

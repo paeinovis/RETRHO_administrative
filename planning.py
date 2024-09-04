@@ -6,8 +6,7 @@ import pandas
 from astropy.coordinates import AltAz, EarthLocation, SkyCoord
 from astropy import units as u
 from astropy.wcs import WCS
-from astropy.time import Time, TimeDelta
-from datetime import datetime
+from astropy.time import Time
 from astroplan.plots import plot_airmass, plot_finder_image, plot_sky
 from astroquery.simbad import Simbad
 from PyQt5.QtWidgets import QComboBox, QMainWindow, QApplication, QPushButton, QWidget, QAction, QVBoxLayout, QLabel, QTabWidget, QInputDialog, QLineEdit, QFileDialog
@@ -22,6 +21,7 @@ import astropy.coordinates as coordinates
 import warnings
 warnings.filterwarnings("ignore", message="Numerical value without unit or explicit format passed to TimeDelta, assuming days")
 warnings.filterwarnings("error")
+warnings.filterwarnings("ignore", message="The plot_date function was deprecated in Matplotlib 3.9 and will be removed in 3.11. Use plot instead.")
 from astroplan import FixedTarget, Observer, TargetAlwaysUpWarning, TargetNeverUpWarning
 from pyvo.dal.exceptions import DALFormatError, DALAccessError, DALServiceError, DALQueryError
 # from astropy.utils import iers
@@ -29,7 +29,6 @@ from pyvo.dal.exceptions import DALFormatError, DALAccessError, DALServiceError,
 # iers.conf.IERS_A_URL_MIRROR = 'https://datacenter.iers.org/data/9/finals2000A.all'
 # from astroplan import download_IERS_A
 # download_IERS_A()
-
 
 RHO = Observer(
     location=coordinates.EarthLocation(lat=29.4001, lon=-82.5862*u.deg, height=23*u.m),
@@ -165,8 +164,9 @@ class MainWindow(QMainWindow):
     # Plot finder image    
     def plot(self, tab):
         if tab.target_names is not None:
-            self.update(tab)
-
+            if not self.update(tab):
+                return
+                
         try: 
             result_table = Simbad.query_object(tab.current_target_name)[["main_id", "ra", "dec", "V"]]
         except (NoResultsWarning, NameResolveError, DALFormatError, DALAccessError, DALServiceError, DALQueryError):
@@ -185,23 +185,21 @@ class MainWindow(QMainWindow):
         canvas.setWindowTitle(title)
         canvas.show();
 
-    # # Plot airmass
-    # def plot_airmass(self, tab):
-    #     if self.update(tab) is False:
-    #         tab.label_info.setText("Object not found. Check spelling and try again.")
-    #         return
-    #     now = Time.now()
-    #     figure = plt.figure()
-    #     canvas = FigureCanvas(figure)
-    #     time_range = now + TimeDelta(range(0, 24*60, 10)*u.minute)
-    #     fig, ax = plt.subplots(figsize=(8, 6))
-    #     plot_airmass(tab.current_target, observer=RHO, time=time_range, brightness_shading=True, ax=ax)
-    #     title = "Airmass plot for " + tab.current_target_name + " (FOV = " + str(self.fov) + ")"
-    #     ax.set_title(title)
-    #     title = tab.current_target_name + " Airmass Plot"
-    #     canvas.setWindowTitle(title)
-    #     canvas.show();
+    # Plot airmass
+    def airmass_plot(self, tab):        
+        now = Time.now()
+        figure = plt.figure(figsize=(8, 6))
+        ax = plot_airmass(tab.current_target, RHO, now)
+        # Genuinely idk why I can't do things normally here e.g. can't do brightness_shading=True without it running into a conversion error but. whatever.
+        title = "Airmass plot for " + tab.current_target_name
+        ax.set_title(title)
+        figure.add_subplot(ax)
+        title = tab.current_target_name + " Airmass Plot"
+        canvas = FigureCanvas(figure)
+        canvas.setWindowTitle(title)
+        canvas.show();
 
+        
     # Update values of dropdown menu
     def update(self, tab):
         name = tab.targets_dropdown.currentText()
@@ -392,8 +390,8 @@ class MainWindow(QMainWindow):
         self.tab1.update_button = QPushButton("Update Targets Up Status")
         self.tab1.update_button.clicked.connect(lambda: determine_up(self.tab1.targets, self.tab1.target_names))
 
-        # self.tab1.plot_airmass_button = QPushButton("Plot airmass")
-        # self.tab1.plot_airmass_button.clicked.connect(lambda: self.plot_airmass(self.tab1))
+        self.tab1.plot_airmass_button = QPushButton("Plot airmass")
+        self.tab1.plot_airmass_button.clicked.connect(lambda: self.airmass_plot(self.tab1))
 
         # Entire tab
         self.tab1.layout = QVBoxLayout()
@@ -402,7 +400,7 @@ class MainWindow(QMainWindow):
         self.tab1.layout.addWidget(self.tab1.label_info)
         self.tab1.layout.addWidget(self.tab1.plot_button)
         self.tab1.layout.addWidget(self.tab1.update_button)
-        # self.tab1.layout.addWidget(self.tab1.plot_airmass_button)
+        self.tab1.layout.addWidget(self.tab1.plot_airmass_button)
         self.tab1.setLayout(self.tab1.layout)
         
     def init_tab_two(self):
@@ -429,8 +427,8 @@ class MainWindow(QMainWindow):
         self.tab2.plot_button = QPushButton("Plot")
         self.tab2.plot_button.clicked.connect(lambda: self.plot_coords(self.tab2))
 
-        # self.tab2.plot_airmass_button = QPushButton("Plot airmass")
-        # self.tab2.plot_airmass_button.clicked.connect(lambda: self.plot_airmass(self.tab2))
+        self.tab2.plot_airmass_button = QPushButton("Plot airmass")
+        self.tab2.plot_airmass_button.clicked.connect(lambda: self.airmass_plot(self.tab2))
 
         self.tab2.update_button = QPushButton("Update Targets Up Status")
         self.tab2.update_button.clicked.connect(lambda: determine_up(self.tab2.targets, self.tab2.target_names))
@@ -445,8 +443,9 @@ class MainWindow(QMainWindow):
         self.tab2.layout.addWidget(self.tab2.targets_dropdown_button)
         self.tab2.layout.addWidget(self.tab2.label_info)
         self.tab2.layout.addWidget(self.tab2.plot_button)
+        self.tab2.layout.addWidget(self.tab2.plot_airmass_button)
         self.tab2.layout.addWidget(self.tab2.update_button)
-        # self.tab2.layout.addWidget(self.tab2.plot_airmass_button)
+        
         self.tab2.setLayout(self.tab2.layout)
     
     def init_tab_three(self):
@@ -458,6 +457,7 @@ class MainWindow(QMainWindow):
         temp_coords = self.tab3.ra + " " + self.tab3.dec
         self.tab3.coords = SkyCoord(temp_coords, unit=(u.hour, u.deg), frame='icrs')
         self.tab3.current_target = FixedTarget(self.tab3.coords, name="Default Coordinates Plot")
+        self.tab3.current_target_name = "Fixed Coordinates"
 
         # Widgets
         self.tab3.fov_input = QLineEdit()
@@ -479,6 +479,9 @@ class MainWindow(QMainWindow):
         self.tab3.plot_button = QPushButton("Plot")
         self.tab3.plot_button.clicked.connect(lambda: self.plot_coords(self.tab3))
 
+        self.tab3.plot_airmass_button = QPushButton("Plot airmass")
+        self.tab3.plot_airmass_button.clicked.connect(lambda: self.airmass_plot(self.tab3))
+
         # Entire tab
         self.tab3.layout = QVBoxLayout()
         self.tab3.layout.addWidget(self.tab3.fov_input)
@@ -488,6 +491,7 @@ class MainWindow(QMainWindow):
         self.tab3.layout.addWidget(self.tab3.dec_input)
         self.tab3.layout.addWidget(self.tab3.dec_input_button)
         self.tab3.layout.addWidget(self.tab3.plot_button)
+        self.tab3.layout.addWidget(self.tab3.plot_airmass_button)
         self.tab3.layout.addWidget(self.tab3.label_info)
 
         self.tab3.setLayout(self.tab3.layout)

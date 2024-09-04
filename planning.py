@@ -49,6 +49,9 @@ def eastern(time):
 
 # Determines which objects are above horizon
 def determine_up(targets, obj_names):
+    if not targets:
+        return
+    
     now = Time.now()                                # Update time
     new_list = []                                   # List of objects with up info
     index = 0
@@ -210,7 +213,6 @@ class MainWindow(QMainWindow):
             index_of_name = tab.target_names.index(name)
         if "(Up)" in name:              # Cuts off the (Up) part of the name if the star is indeed up, so SIMBAD can query
             name = name[0:-5]
-        tab.target_names = determine_up(tab.targets, tab.target_names)
         tab.current_target_name = name
 
         if tab is self.tab2:
@@ -387,6 +389,9 @@ class MainWindow(QMainWindow):
         self.tab1.plot_button = QPushButton("Plot")
         self.tab1.plot_button.clicked.connect(lambda: self.plot(self.tab1))
 
+        self.tab1.update_button = QPushButton("Update Targets Up Status")
+        self.tab1.update_button.clicked.connect(lambda: determine_up(self.tab1.targets, self.tab1.target_names))
+
         # self.tab1.plot_airmass_button = QPushButton("Plot airmass")
         # self.tab1.plot_airmass_button.clicked.connect(lambda: self.plot_airmass(self.tab1))
 
@@ -396,6 +401,7 @@ class MainWindow(QMainWindow):
         self.tab1.layout.addWidget(self.tab1.targets_dropdown_button)
         self.tab1.layout.addWidget(self.tab1.label_info)
         self.tab1.layout.addWidget(self.tab1.plot_button)
+        self.tab1.layout.addWidget(self.tab1.update_button)
         # self.tab1.layout.addWidget(self.tab1.plot_airmass_button)
         self.tab1.setLayout(self.tab1.layout)
         
@@ -426,6 +432,9 @@ class MainWindow(QMainWindow):
         # self.tab2.plot_airmass_button = QPushButton("Plot airmass")
         # self.tab2.plot_airmass_button.clicked.connect(lambda: self.plot_airmass(self.tab2))
 
+        self.tab2.update_button = QPushButton("Update Targets Up Status")
+        self.tab2.update_button.clicked.connect(lambda: determine_up(self.tab2.targets, self.tab2.target_names))
+
         self.tab2.file_upload_button = QPushButton("Upload file")
         self.tab2.file_upload_button.clicked.connect(self.open_file_dialog)
 
@@ -436,6 +445,7 @@ class MainWindow(QMainWindow):
         self.tab2.layout.addWidget(self.tab2.targets_dropdown_button)
         self.tab2.layout.addWidget(self.tab2.label_info)
         self.tab2.layout.addWidget(self.tab2.plot_button)
+        self.tab2.layout.addWidget(self.tab2.update_button)
         # self.tab2.layout.addWidget(self.tab2.plot_airmass_button)
         self.tab2.setLayout(self.tab2.layout)
     

@@ -1,10 +1,11 @@
-const COLUMN_COUNT = 23;          // Number of columns in the template sheet
-const ADD_COLS = 6;               // Number of columns preceding the template columns in Master sheet (template starts @ "Property")
-const CODE_INDEX = 2;             // Index of reference code. Only change if column moves from B
+const COLUMN_COUNT = 24;          // Number of columns in the template sheet
+const ADD_COLS = 7;               // Number of columns preceding the template columns in Master sheet (template starts @ "Property")
+const CODE_INDEX = 3;             // Index of reference code. Only change if column moves from C
 
 var response_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Form Responses 1");
 var master_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("TargetMasterSheet");          
-// This name is one word to avoid Linux fuckery ^
+// The name of "TargetMasterSheet" is one word to avoid Linux fuckery ^
+var master_response_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("All Responses");
 var target_submit_sheet;
 
 function consolidate() {
@@ -43,13 +44,14 @@ function consolidate() {
 // Put targets from submitted sheet into master sheet (assumes correct user input after the column check)
 function storeTargets(date, name, email, num_targets, access) {
   var targets_names = [];
-  var ref_code = getRefCode(date);
+  var ref_code = determineSwitch(date);
   try {
     var last_row = master_sheet.getLastRow();           // Gets index of row where data ends - new data will be added After this row.
     for (let i = 1; i <= num_targets; i++) {
       var index = last_row + i;
       master_sheet.getRange(index, ADD_COLS - 2, 1, 3).setValues([[name, email, access]]);        // Set three user-related columns to submitted conditions
-      master_sheet.getRange(index, CODE_INDEX, 1, 1).setValue(ref_code);
+      master_sheet.getRange(index, 1, 1, 1).setValue(date);                                       // Set date that target was submitted
+      master_sheet.getRange(index, CODE_INDEX, 1, 1).setValue(ref_code);                          // Set the previously-generated reference code
       let to_set_vals = target_submit_sheet.getSheetValues(i + 3, 1, 1, COLUMN_COUNT);            // Grab target info (while ignoring first 3 rows, which are Column Titles, Format, and Example)
       master_sheet.getRange(index, ADD_COLS + 1, 1, COLUMN_COUNT).setValues(to_set_vals);         // Set info in master sheet As submitted target info
       targets_names.push(to_set_vals[0][1]);                                                      // Grab names of targets
@@ -91,7 +93,6 @@ function getRefCode(date) {
   var semester = determineSemester(date_obj.getMonth());
 
   var last_row = response_sheet.getLastRow() - 1;           // Gets index of last row to determine how many submissions have been made in total.
-  // NOTE THAT THIS MUST BE CLEARED OUT PER SEMESTER if the numbers are to rollover.
 
   var num = last_row.toString();
   switch (num.length) {             // Adds zeroes before number in the event number is < 3 digits long
@@ -109,22 +110,44 @@ function getRefCode(date) {
   return str;
 } 
 
+function determineSwitch(date) {
+  var last_row = response_sheet.getLastRow();
+  if (last_row == 2) {
+    return getRefCode(date);                  // If First submission somehow, don't compare to anything.
+  } 
+  var last_semester = getRefCode(response_sheet.getSheetValues(3, 1, 1, 1)[0][0]);      // Generate ref code of last submission date Before most recent submission date
+  last_semester = last_semester[2];           // Get semester letter of the most recent submission
+  var curr_ref_code = getRefCode(date);       // Generate ref code of most recent submission date
+  var curr_semester = curr_ref_code[2];
+  if (curr_semester === last_semester) {      // If same semester, don't clear
+    return curr_ref_code;
+  }
+  else {                                      // If not same semester, reset count by clearing submissions and storing them in other sheet
+    var last_col = response_sheet.getLastColumn();
+    let to_set_vals_2 = response_sheet.getSheetValues(3, 1, last_row, last_col);
+    var last_mast_row = master_response_sheet.getLastRow();
+    master_response_sheet.getRange(last_mast_row, 1, last_row, last_col).setValues(to_set_vals_2);
+    response_sheet.deleteRows(3, last_row);
+    return getRefCode(date);                  // Return ref code with reset values 
+  }
+}
+
 function determineSemester(month) {
   switch(month) {
+    case 0:         // If first four months (Jan, Feb, Mar, Apr), Semester A
     case 1:
     case 2:
     case 3:
-    case 4:
       return "A";
+    case 4:         // If middle four months (May, June, July, Aug), Semester B
     case 5:
     case 6:
     case 7:
-    case 8:
       return "B";
+    case 8:         // If last four months (Sep, Oct, Nov, Dec), Semester C 
     case 9:
     case 10:
     case 11:
-    case 12:
       return "C";
     default:
       return "ERROR";

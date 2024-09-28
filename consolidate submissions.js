@@ -4,7 +4,7 @@ const CODE_INDEX = 3;             // Index of reference code. Only change if col
 
 var response_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Form Responses 1");
 var master_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("TargetMasterSheet");          
-// The name of "TargetMasterSheet" is one word to avoid Linux fuckery ^
+// The name of "TargetMasterSheet" is one word to avoid Linux shenanigans ^
 var master_response_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("All Responses");
 var target_submit_sheet;
 
@@ -171,7 +171,11 @@ function sendEmail(name, email, success, msg, code) {
     "<br/><br/><br/><b>List of targets:</b><br/>" + msg;
   }
   else {
-    // If ERROR, delete latest (erroneous) submission info from response sheet as to not count it toward future project codes
+    // If ERROR, delete latest (erroneous) submission info from response sheet as to not count it toward future project codes - but store it just in case
+    var last_col = response_sheet.getLastColumn();
+    let to_set_vals = response_sheet.getSheetValues(2, 1, 1, last_col);
+    var last_mast_row = master_response_sheet.getLastRow();
+    master_response_sheet.getRange(last_mast_row, 1, 1, last_col).setValues(to_set_vals);
     response_sheet.deleteRows(2, 1);
 
     subj = "[ERROR] - RETRHO Target Submission Failure";

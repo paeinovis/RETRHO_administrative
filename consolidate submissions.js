@@ -171,6 +171,9 @@ function sendEmail(name, email, success, msg, code) {
     "<br/><br/><br/><b>List of targets:</b><br/>" + msg;
   }
   else {
+    // If ERROR, delete latest (erroneous) submission info from response sheet as to not count it toward future project codes
+    response_sheet.deleteRows(2, 1);
+
     subj = "[ERROR] - RETRHO Target Submission Failure";
     var err_msg = "";
     switch(msg) {

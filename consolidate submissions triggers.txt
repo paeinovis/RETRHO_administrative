@@ -1,0 +1,4 @@
+Form submit trigger
+Function to run: consolidate
+Event source: From spreadsheet
+Event type: On form submit

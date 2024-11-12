@@ -1,6 +1,6 @@
 var sheet = SpreadsheetApp.getActiveSpreadsheet();
 var sheet_schedule = sheet.getSheetByName("Schedule");    // I realize Java style for vars is probably camelcase . but I like Python
-var sheet_signup = sheet.getSheetByName("Signup");
+var sheet_signup = sheet.getSheetByName("Signup");        // Forms data sheet
 
 var days_num = sheet_schedule.getLastRow() - 1;
 
@@ -132,6 +132,7 @@ function sendFollowupEmail(name, date, email, success) {
   let followup_form_link = text.link("https://forms.gle/uho4GmKyziWcE3r86");
   let signup_form_link = text.link("https://forms.gle/Tf1zrxuVezn6nU5c8");
   let signup_sheet_link = text.link("https://docs.google.com/spreadsheets/d/1r_Dt8ZNdDHkeHi25e36xfJpojqJLoxDwxNC4BB9Y4Sw/edit?usp=sharing");
+  let calendar_link = text.link("https://calendar.google.com/calendar/u/0?cid=YzE4MGI4ZmMxNjkyM2FmMDczMmIyZDRhNDZhODc4YTkwNjZjNzhiY2Y2YjMwMjA2NmFjZDYzNmRlZjJkZTk3MkBncm91cC5jYWxlbmRhci5nb29nbGUuY29t");
 
   var subj;
   var message;
@@ -140,7 +141,7 @@ function sendFollowupEmail(name, date, email, success) {
     subj = "[SUCCESS] - RETRHO Observing Schedule Updated";
     message = "Dear " + name + ",<br/><br/>" + 
     "Your request to be added to the observing schedule for the date <b>" + date + "</b> has successfully been processed." +
-    "<br/><br/>Please check the observing signup Google sheet <b>" + signup_sheet_link + "</b> to ensure the information you entered was correct. If there was an error in your submission, please reply to this email to update it." + 
+    "<br/><br/>Please check the observing signup Google sheet <b>" + signup_sheet_link + "</b> to ensure the information you entered was correct. The event can also be found on the calender <b>" + calendar_link + "</b>. If there was an error in your submission, please reply to this email to update it." + 
     "<br/><br/>Please remember to complete the followup Google form to keep track of your observing history.<br/><b> The followup form can be found " + followup_form_link + "</b>." +
     "<br/><br/>Thank you for using the RETRHO interface.";
   }
@@ -275,6 +276,52 @@ function updateCalendar(date_to_obs) {            // Take date and parse info to
   calendar.createEvent("Observing", sunset, sunrise);
 
   return;
+}
+
+
+function checkDayOfEmail() {
+  const today = new Date().toLocaleDateString();
+  var rows_num = sheet_signup.getLastColumn() - 1;
+  var dates = sheet_signup.getSheetValues(2, 3, 1, rows_num);
+  var emails = sheet_signup.getSheetValues(2, 4, 1, rows_num);
+  var opts = sheet_signup.getSheetValues(2, 7, 1, rows_num);
+
+  for (let i = 0; i < rows_num; i++) {
+    var date_to_obs = dates[0][i];
+    date_to_obs = new Date(date_to_obs.toString());
+    var opt_in = opts[0][i];
+
+    if (opt_in == 'Yes') {
+      var date_to_obs_string = date_to_obs.toLocaleString().split(",");
+      var date_to_obs_string = date_to_obs_string[0];
+      if (today === date_to_obs_string) {
+        var email = emails[0][i];
+        sendDayOfEmail(email, date_to_obs)
+      }
+    }
+  }
+
+
+}
+
+function sendDayOfEmail(email){
+  let text = "here";
+  let followup_form_link = text.link("https://forms.gle/uho4GmKyziWcE3r86");
+  let calendar_link = text.link("https://calendar.google.com/calendar/u/0?cid=YzE4MGI4ZmMxNjkyM2FmMDczMmIyZDRhNDZhODc4YTkwNjZjNzhiY2Y2YjMwMjA2NmFjZDYzNmRlZjJkZTk3MkBncm91cC5jYWxlbmRhci5nb29nbGUuY29t");
+
+  var subj;
+  var message;
+
+  subj = "RETRHO Observing Reminder";
+  message = "This is a requested reminder of your observing session today." +
+  "<br/><br/>Please arrive about an hour before sunset at the observing room. Specifically, observing takes place in the Bryant Space Science Center building near the Hub, in room 221b (221 is the undergrad lounge on the second floor). For an estimated time to arrive, check the calendar " + calendar_link + "." +
+  "<br/><br/>Please remember to complete the followup Google form to keep track of your observing history.<br/><b> The followup form can be found " + followup_form_link + "</b>." +
+  "<br/><br/>Thank you for using the RETRHO interface.";
+
+  MailApp.sendEmail({
+    to: email, 
+    subject: subj, 
+    htmlBody: message});
 }
 
 

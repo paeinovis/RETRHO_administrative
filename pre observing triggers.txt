@@ -1,0 +1,10 @@
+Time-based trigger
+Function to run: checkDayOfEmail
+Event source: Time-driven
+Type of time based trigger: Day timer
+Select time of day: 8am to 9am
+
+Form submit trigger
+Function to run: initDays
+Event source: From spreadsheet
+Event type: On form submit

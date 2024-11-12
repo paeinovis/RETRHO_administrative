@@ -172,6 +172,7 @@ function sendEmail(name, email, success, msg, code) {
   }
   else {
     // If ERROR, delete latest (erroneous) submission info from response sheet as to not count it toward future project codes - but store it just in case
+    // FIXME: test this
     var last_col = response_sheet.getLastColumn();
     let to_set_vals = response_sheet.getSheetValues(2, 1, 1, last_col);
     var last_mast_row = master_response_sheet.getLastRow();

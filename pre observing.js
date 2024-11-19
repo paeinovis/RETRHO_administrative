@@ -7,7 +7,7 @@ var days_num = sheet_schedule.getLastRow() - 1;
 var days_list = [];
 
 const MAX_OBS = 5;
-
+const SENIOR_ROW_NUM = 8;
 var calendar = CalendarApp.getCalendarById("c180b8fc16923af0732b2d4a46a878a9066c78bcf6b302066acd636def2de972@group.calendar.google.com");
 
 // Class for days
@@ -28,7 +28,12 @@ function initDays() {
   for (let i = 0; i < days_num; i++) {
     var curr_day = days[i][0];
     var curr_num_obs = num_obs[i][0];
-    var curr_obs_list = sheet_schedule.getSheetValues(i + 2, 3, 1, curr_num_obs);    // Get list of all signed up observers
+    if (curr_num_obs == 0) {
+      var curr_obs_list = [];
+    }
+    else {
+      var curr_obs_list = sheet_schedule.getSheetValues(i + 2, 3, 1, curr_num_obs);    // Get list of all signed up observers
+    }
 
     var day = new ScheduledDay(curr_day, curr_num_obs, curr_obs_list);
     days_list.push(day);
@@ -48,9 +53,11 @@ function parseSignup(days) {
   
   let email_date = latest_night_obs.toString().substring(0, 15);
 
-  var color;
-  if (latest_entry_exp === "Senior") { color = 'blue'; }
-  else if (latest_entry_exp === "Junior") { color = 'orange'; }
+  var color = 'orange';
+  if (latest_entry_exp === "Senior") { 
+    addSenior(latest_entry_name, latest_night_obs, latest_entry_email, days);
+    return;
+  }
 
   var arr = checkDuplicateDays(days, latest_night_obs);
   if (arr[0]) {                                                                 // If day is already on schedule, don't re-add. Only add name
@@ -115,6 +122,10 @@ function checkDuplicateDays(days, day_name) {
 }
 
 function checkDuplicateName(listComp, indivComp) {
+  if (listComp.length === 0) {
+      var arr = [false, -1];
+      return arr;
+  }
   for (let i = 0; i < listComp[0].length; i++) {
     var curr = listComp[0][i].toString();
     if (curr.localeCompare(indivComp) === 0) {
@@ -126,6 +137,36 @@ function checkDuplicateName(listComp, indivComp) {
   return arr;
 }
 
+function addSenior(latest_entry_name, latest_night_obs, latest_entry_email, days) {
+    let email_date = latest_night_obs.toString().substring(0, 15);
+    var arr = checkDuplicateDays(days, latest_night_obs);
+    let index2 = SENIOR_ROW_NUM;                                                  // Column to list senior observer
+    if (arr[0]) {                                                                 // If day is already on schedule, don't re-add. Only add name
+      let curr_day = days_list[arr[1]];
+      let index = days_list.indexOf(curr_day) + 2;                                // Row to list new observer
+
+      if (!sheet_schedule.getRange(index, index2, 1, 1).isBlank()) {              // If a senior observer has not already signed up, do not add.
+        sendFollowupEmail(latest_entry_name, email_date, latest_entry_email, false);
+        return;
+      }
+                                            
+    sheet_schedule.getRange(index, index2, 1, 1).setValue(latest_entry_name).setFontColor('blue');  
+    sendFollowupEmail(latest_entry_name, email_date, latest_entry_email, true); 
+    // Else add name to end of list
+  }
+  else {                                                                             // If first observer for a new date
+    var index = days_num + 2;
+    sheet_schedule.getRange(index, 1, 1, 1).setValue(latest_night_obs);              // Set date to entry date
+    sheet_schedule.getRange(index, 2, 1, 1).setValue(0);                             // Set number of junior observers to 0
+    sheet_schedule.getRange(index, index2, 1, 1).setValue(latest_entry_name).setFontColor('blue');   
+    // Set senior observer
+
+    let cal_add = latest_night_obs.toString();
+    updateCalendar(cal_add);       // New date for observing, add to calendar.
+  }
+  sortBySoonest();    // Re-sort after adding
+  sendFollowupEmail(latest_entry_name, email_date, latest_entry_email, true);
+}
 
 function sendFollowupEmail(name, date, email, success) {
   let text = "here";
@@ -150,7 +191,7 @@ function sendFollowupEmail(name, date, email, success) {
     message = "Dear " + name + ",<br/><br/>" + 
     "Your request to be added to the observing schedule for the date <b>" + date + "</b> has <b>NOT</b> been successfully processed. Please retry submission through the signup Google form." + 
     "<br/><br/> <b>The signup form can be found " + signup_form_link + "</b>." + 
-    "<br/><br/> Note that only 5 observers can observe a night, so if there are 5 people already signed up, you will not be able to observe on that night. Alternatively, you may already be signed up. Please check the signup sheet " + signup_sheet_link + " before trying again." +
+    "<br/><br/> Note that only 5 observers can observe a night, so if there are 5 people already signed up, you will not be able to observe on that night. Alternatively, you may already be signed up. Please check the signup sheet " + signup_sheet_link + " before trying again. Note that if you are a senior observer, there may be one senior observer signed up already." +
     "<br/><br/>Thank you for using the RETRHO interface.";    
   }
   MailApp.sendEmail({

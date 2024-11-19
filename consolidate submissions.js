@@ -6,6 +6,7 @@ var response_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Form 
 var master_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("TargetMasterSheet");          
 // The name of "TargetMasterSheet" is one word to avoid Linux shenanigans ^
 var master_response_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("All Responses");
+var expired_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Expired Targets");
 var target_submit_sheet;
 
 function consolidate() {
@@ -201,6 +202,27 @@ function sendEmail(name, email, success, msg, code) {
     to: email, 
     subject: subj, 
     htmlBody: message});
+}
+
+
+function moveExpired(){
+  const today = new Date();
+  var rows_num = master_sheet.getLastRow() - 2;
+  var last_row = master_sheet.getLastRow();
+  var dates_close = master_sheet.getSheetValues(3, 16, rows_num, 1);
+  var last_col = master_sheet.getLastColumn();
+
+  for (let i = last_row; i >= 3; i--) {
+    rows_num--;
+    var date_close = dates_close[rows_num][0];
+    // If target has expired (a.k.a. ability to observe it has passed), remove
+    if(today > date_close) {
+      let to_set_vals = master_sheet.getSheetValues(rows_num, 1, 1, last_col);
+      let last_row_exp = expired_sheet.getLastRow();
+      expired_sheet.getRange(last_row_exp + 1, 1, 1, last_col).setValues(to_set_vals);
+      master_sheet.deleteRows(rows_num, 1);
+    }
+  }
 }
 
 

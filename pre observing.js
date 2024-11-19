@@ -132,7 +132,7 @@ function sendFollowupEmail(name, date, email, success) {
   let followup_form_link = text.link("https://forms.gle/uho4GmKyziWcE3r86");
   let signup_form_link = text.link("https://forms.gle/Tf1zrxuVezn6nU5c8");
   let signup_sheet_link = text.link("https://docs.google.com/spreadsheets/d/1r_Dt8ZNdDHkeHi25e36xfJpojqJLoxDwxNC4BB9Y4Sw/edit?usp=sharing");
-  let calendar_link = text.link("https://calendar.google.com/calendar/u/0?cid=YzE4MGI4ZmMxNjkyM2FmMDczMmIyZDRhNDZhODc4YTkwNjZjNzhiY2Y2YjMwMjA2NmFjZDYzNmRlZjJkZTk3MkBncm91cC5jYWxlbmRhci5nb29nbGUuY29t");
+  let calendar_link = text.link("https://calendar.google.com/calendar/embed?src=c180b8fc16923af0732b2d4a46a878a9066c78bcf6b302066acd636def2de972%40group.calendar.google.com&ctz=America%2FNew_York");
 
   var subj;
   var message;
@@ -279,23 +279,30 @@ function updateCalendar(date_to_obs) {            // Take date and parse info to
 }
 
 
+// This is the function that runs daily between 8 and 9 am and sends emails to any people signed up And opted in 
+// to receive a reminder email the day of a given observing day
+// This functions as main for the daily trigger; if debugging, start here
 function checkDayOfEmail() {
   const today = new Date().toLocaleDateString();
-  var rows_num = sheet_signup.getLastColumn() - 1;
-  var dates = sheet_signup.getSheetValues(2, 3, 1, rows_num);
-  var emails = sheet_signup.getSheetValues(2, 4, 1, rows_num);
-  var opts = sheet_signup.getSheetValues(2, 7, 1, rows_num);
+  var rows_num = sheet_signup.getLastRow() - 1;
+  var dates = sheet_signup.getSheetValues(2, 3, rows_num, 1);
+  var emails = sheet_signup.getSheetValues(2, 4, rows_num, 1);
+  var opts = sheet_signup.getSheetValues(2, 7, rows_num, 1);
 
+  // Goes through every signed up observe
   for (let i = 0; i < rows_num; i++) {
-    var date_to_obs = dates[0][i];
+    var date_to_obs = dates[i][0];
     date_to_obs = new Date(date_to_obs.toString());
-    var opt_in = opts[0][i];
+    var opt_in = opts[i][0];
 
+    // Checks if the person opted in
     if (opt_in == 'Yes') {
       var date_to_obs_string = date_to_obs.toLocaleString().split(",");
       var date_to_obs_string = date_to_obs_string[0];
+      // Checks if the date today and the date signed up to observe is the same
       if (today === date_to_obs_string) {
-        var email = emails[0][i];
+        var email = emails[i][0];
+        // Sends reminder email if so
         sendDayOfEmail(email, date_to_obs)
       }
     }
@@ -304,10 +311,11 @@ function checkDayOfEmail() {
 
 }
 
+// Function that sends reminder email following checkDayOfEmail
 function sendDayOfEmail(email){
   let text = "here";
   let followup_form_link = text.link("https://forms.gle/uho4GmKyziWcE3r86");
-  let calendar_link = text.link("https://calendar.google.com/calendar/u/0?cid=YzE4MGI4ZmMxNjkyM2FmMDczMmIyZDRhNDZhODc4YTkwNjZjNzhiY2Y2YjMwMjA2NmFjZDYzNmRlZjJkZTk3MkBncm91cC5jYWxlbmRhci5nb29nbGUuY29t");
+  let calendar_link = text.link("https://calendar.google.com/calendar/embed?src=c180b8fc16923af0732b2d4a46a878a9066c78bcf6b302066acd636def2de972%40group.calendar.google.com&ctz=America%2FNew_York");
 
   var subj;
   var message;

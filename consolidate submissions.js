@@ -217,10 +217,10 @@ function moveExpired(){
     var date_close = dates_close[rows_num][0];
     // If target has expired (a.k.a. ability to observe it has passed), remove
     if(today > date_close) {
-      let to_set_vals = master_sheet.getSheetValues(rows_num, 1, 1, last_col);
+      let to_set_vals = master_sheet.getSheetValues(i, 1, 1, last_col);
       let last_row_exp = expired_sheet.getLastRow();
       expired_sheet.getRange(last_row_exp + 1, 1, 1, last_col).setValues(to_set_vals);
-      master_sheet.deleteRows(rows_num, 1);
+      master_sheet.deleteRows(i, 1);
     }
   }
 }

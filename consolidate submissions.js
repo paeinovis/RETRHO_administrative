@@ -29,16 +29,25 @@ function consolidate() {
   var col_headers_submit = target_submit_sheet.getSheetValues(1, 1, 1, COLUMN_COUNT);   
   var col_headers_template = master_sheet.getSheetValues(1, ADD_COLS + 1, 1, COLUMN_COUNT);
 
-  var arr1 = JSON.stringify(col_headers_submit);
-  arr1 = arr1.replace(/[\r\n\s]+/gm, "");             // Removes whitespace to allow for comparison
-  var arr2 = JSON.stringify(col_headers_template);
-  arr2 = arr2.replace(/[\r\n\s]+/gm, "");
+  var arr_submit = JSON.stringify(col_headers_submit);
+  arr_submit = arr_submit.replace(/[\r\n\s]+/gm, "");             // Removes whitespace to allow for comparison
+  var arr_template = JSON.stringify(col_headers_template);
+  arr_template = arr_template.replace(/[\r\n\s]+/gm, "");
 
-  if (arr1 === arr2) {                                // If columns match, attempt to store targets in master sheet
+  if (arr_submit === arr_template) {                                // If columns match, attempt to store targets in master sheet
     storeTargets(latest_entry_date, latest_entry_name, latest_entry_email, latest_entry_num_targets, latest_entry_access);
   }
   else {                                              // Otherwise, the user or program might've messed something up
-    sendEmail(latest_entry_name, latest_entry_email, false, "Column Mismatch", "");
+    var list_msg = findDiff(col_headers_template[0], col_headers_submit[0]);
+    var string_msg = "";
+    for (let i = 0; i < list_msg.length; i++) {
+      string_msg += list_msg[i];
+      string_msg += ", ";
+      if (i == list_msg.length - 2) {
+        string_msg += "and ";
+      }
+    }
+    sendEmail(latest_entry_name, latest_entry_email, false, "Column Mismatch", string_msg);
   }
 }
 
@@ -84,7 +93,6 @@ function sortBySubmission() {
 function replaceSheet(fileID) {                                   
   const convertedFileId = Drive.Files.copy({ title: "temp", mimeType: MimeType.GOOGLE_SHEETS }, fileID, { supportsAllDrives: true }).id;
   target_submit_sheet = SpreadsheetApp.openById(convertedFileId);
-  // DriveApp.getFileById(fileID).setTrashed(true);         // Optional?: Delete the XLSX file
 }
 
 function getRefCode(date) {
@@ -106,7 +114,6 @@ function getRefCode(date) {
     default:
       break;
   }
-  
   var str = year.substr(2, 2) + semester + num;
   return str;
 } 
@@ -173,7 +180,6 @@ function sendEmail(name, email, success, msg, code) {
   }
   else {
     // If ERROR, delete latest (erroneous) submission info from response sheet as to not count it toward future project codes - but store it just in case
-    // FIXME: test this
     var last_col = response_sheet.getLastColumn();
     let to_set_vals = response_sheet.getSheetValues(2, 1, 1, last_col);
     var last_mast_row = master_response_sheet.getLastRow();
@@ -184,7 +190,7 @@ function sendEmail(name, email, success, msg, code) {
     var err_msg = "";
     switch(msg) {
       case "Column Mismatch": {
-        err_msg = "There was a discrepancy detected between the template sheet and the submitted sheet. Please make sure to use the latest template sheet found <b>" + template_link + "</b> to ensure your submission can be processed correctly."
+        err_msg = "There was a discrepancy detected between the template sheet and the submitted sheet in the columns " + code + "which is preventing the program from parsing the targets. Please make sure to use the latest template sheet found <b>" + template_link + "</b> to ensure your submission can be processed correctly."
         break;
       }
       default: {
@@ -205,6 +211,22 @@ function sendEmail(name, email, success, msg, code) {
 }
 
 
+function findDiff(correct_str, user_str) {
+  let diff = [];
+  let j = 0;
+  for (let i = 0; j < correct_str.length; i++) {
+    var correct_col = correct_str[j].replace(/[\r\n\s]+/gm, "");
+    var user_col = user_str[i].replace(/[\r\n\s]+/gm, "");
+    if (correct_col !== user_col) {
+      diff.push(correct_str[j]);
+      i--;
+    }
+    j++;
+  }
+  return diff;
+}
+
+// This runs daily to clip out old targets
 function moveExpired(){
   const today = new Date();
   var rows_num = master_sheet.getLastRow() - 2;
@@ -226,10 +248,10 @@ function moveExpired(){
 }
 
 
+
 // -------------------------------------
 // Future Work
 
-// figure out if it's necessary/better to delete pre-convert sheet or delete after processing to save space? Worth noting that xlsx sheet is ~a magnitude greater of space but we're still talking KBs so. Would also be better to keep OG xlsx file in case of issues w/ parsing.
 // -------------------------------------
 
 

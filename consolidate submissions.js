@@ -1,24 +1,44 @@
 const COLUMN_COUNT = 24;          // Number of columns in the template sheet
 const ADD_COLS = 7;               // Number of columns preceding the template columns in Master sheet (template starts @ "Property")
-const CODE_INDEX = 3;             // Index of reference code. Only change if column moves from C
+const CODE_INDEX = 3;             // Index of reference code, for parsed sheet. Only change if column moves from C
+const UNUSED_ROWS_TEMP = 3;              
+// ^ Number of not-data rows in template sheet (column name row = 1, format row = 2, example row = 3)
+const UNUSED_ROWS_MAST = 2;
+// ^ Number of not-data rows in master sheet (column name row = 1, format row = 2)              
 
-var response_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Form Responses 1");
-var master_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("TargetMasterSheet");          
+// Columns for form response sheet
+const DATE_COL_NUM = 1;
+const NAME_COL_NUM = 2;
+const EMAIL_COL_NUM = 3;
+const SHEET_LINK_COL_NUM = 4;
+const NUM_TARG_COL_NUM = 5;
+const ACCESS_COL_NUM = 6;
+
+// Columns for submitted sheet
+const TARGET_NAME_COL_NUM = 2;
+const OBS_DATE_OPEN_COL_NUM = 8;
+const OBS_DATE_CLOSE_COL_NUM = 9;    // Column index of observing window close date
+
+var response_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Form Responses 1");    // Response sheet for the current semester
+var master_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("TargetMasterSheet");     // Parsed sheet
 // The name of "TargetMasterSheet" is one word to avoid Linux shenanigans ^
-var master_response_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("All Responses");
-var expired_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Expired Targets");
+var master_response_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("All Responses");    
+// ^ Sheet of responses for all semesters excl. current
+var expired_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Expired Targets");      
+// ^ Targets whose obs windows have passed, or observations have been completed
 var target_submit_sheet;
+// ^ To-be sheet that was submitted by user
 
 function consolidate() {
   sortBySubmission();
 
   // Grab latest submission values and submitted sheet
-  var latest_entry_date = response_sheet.getSheetValues(2, 1, 1, 1)[0][0];
-  var latest_entry_name = response_sheet.getSheetValues(2, 2, 1, 1)[0][0];
-  var latest_entry_email = response_sheet.getSheetValues(2, 3, 1, 1)[0][0];
-  var latest_entry_sheet_link = response_sheet.getSheetValues(2, 4, 1, 1)[0][0];
-  var latest_entry_num_targets = response_sheet.getSheetValues(2, 5, 1, 1)[0][0];
-  var latest_entry_access = response_sheet.getSheetValues(2, 6, 1, 1)[0][0];
+  var latest_entry_date = response_sheet.getSheetValues(2, DATE_COL_NUM, 1, 1)[0][0];
+  var latest_entry_name = response_sheet.getSheetValues(2, NAME_COL_NUM, 1, 1)[0][0];
+  var latest_entry_email = response_sheet.getSheetValues(2, EMAIL_COL_NUM, 1, 1)[0][0];
+  var latest_entry_sheet_link = response_sheet.getSheetValues(2, SHEET_LINK_COL_NUM, 1, 1)[0][0];
+  var latest_entry_num_targets = response_sheet.getSheetValues(2, NUM_TARG_COL_NUM, 1, 1)[0][0];
+  var latest_entry_access = response_sheet.getSheetValues(2, ACCESS_COL_NUM, 1, 1)[0][0];
 
   // Get sheet id from link
   let len = latest_entry_sheet_link.length;
@@ -30,14 +50,29 @@ function consolidate() {
   var col_headers_template = master_sheet.getSheetValues(1, ADD_COLS + 1, 1, COLUMN_COUNT);
 
   var arr_submit = JSON.stringify(col_headers_submit);
-  arr_submit = arr_submit.replace(/[\r\n\s]+/gm, "");             // Removes whitespace to allow for comparison
+  arr_submit = arr_submit.replace(/[\r\n\s]+/gm, "");               // Removes whitespace to allow for comparison
   var arr_template = JSON.stringify(col_headers_template);
   arr_template = arr_template.replace(/[\r\n\s]+/gm, "");
 
-  if (arr_submit === arr_template) {                                // If columns match, attempt to store targets in master sheet
+  var windows = dateCheck(latest_entry_num_targets);
+
+  // If columns match and obs windows are valid, attempt to store targets in master sheet
+  if ((arr_submit === arr_template) && windows[0]) {                                
     storeTargets(latest_entry_date, latest_entry_name, latest_entry_email, latest_entry_num_targets, latest_entry_access);
   }
-  else {                                              // Otherwise, the user or program might've messed something up
+  else if (!windows[0]) {
+    var list_msg = windows[1];
+    var string_msg = "";
+    for (let i = 0; i < list_msg.length; i++) {
+      string_msg += list_msg[i];
+      string_msg += ", ";
+      if (i == list_msg.length - 2) {
+        string_msg += "and ";
+      }
+    }
+    sendEmail(latest_entry_name, latest_entry_email, false, "Window Mismatch", string_msg);
+  }
+  else {                                                            // Otherwise, the user or program might've messed something up w/ columns
     var list_msg = findDiff(col_headers_template[0], col_headers_submit[0]);
     var string_msg = "";
     for (let i = 0; i < list_msg.length; i++) {
@@ -51,6 +86,7 @@ function consolidate() {
   }
 }
 
+
 // Put targets from submitted sheet into master sheet (assumes correct user input after the column check)
 function storeTargets(date, name, email, num_targets, access) {
   var targets_names = [];
@@ -60,9 +96,9 @@ function storeTargets(date, name, email, num_targets, access) {
     for (let i = 1; i <= num_targets; i++) {
       var index = last_row + i;
       master_sheet.getRange(index, ADD_COLS - 2, 1, 3).setValues([[name, email, access]]);        // Set three user-related columns to submitted conditions
-      master_sheet.getRange(index, 1, 1, 1).setValue(date);                                       // Set date that target was submitted
+      master_sheet.getRange(index, DATE_COL_NUM, 1, 1).setValue(date);                            // Set date that target was submitted
       master_sheet.getRange(index, CODE_INDEX, 1, 1).setValue(ref_code);                          // Set the previously-generated reference code
-      let to_set_vals = target_submit_sheet.getSheetValues(i + 3, 1, 1, COLUMN_COUNT);            // Grab target info (while ignoring first 3 rows, which are Column Titles, Format, and Example)
+      let to_set_vals = target_submit_sheet.getSheetValues(i + UNUSED_ROWS_TEMP, 1, 1, COLUMN_COUNT);            // Grab target info (while ignoring first 3 rows, which are Column Titles, Format, and Example)
       master_sheet.getRange(index, ADD_COLS + 1, 1, COLUMN_COUNT).setValues(to_set_vals);         // Set info in master sheet As submitted target info
       targets_names.push(to_set_vals[0][1]);                                                      // Grab names of targets
     }
@@ -82,18 +118,41 @@ function storeTargets(date, name, email, num_targets, access) {
     // I'm sure other things will make it fail as well, but we'll figure those out as we go
     sendEmail(name, email, false, err, ref_code);      
   }
-}
+};
+
+
+// This ensures obs windows are valid
+function dateCheck(num_targets) {
+  var valid = true;
+  problems = [];
+  var win_open = target_submit_sheet.getSheetValues(1 + UNUSED_ROWS_TEMP, OBS_DATE_OPEN_COL_NUM, num_targets, 1);
+  var win_close = target_submit_sheet.getSheetValues(1 + UNUSED_ROWS_TEMP, OBS_DATE_CLOSE_COL_NUM, num_targets, 1);
+  var targets_names = target_submit_sheet.getSheetValues(1 + UNUSED_ROWS_TEMP, TARGET_NAME_COL_NUM, num_targets, 1);
+  const today = new Date();
+
+    for (let i = 0; i < num_targets; i++) {
+      // If window close happens before window opens, or if target has already expired
+      if ((win_close[i][0] < win_open[i][0]) || ((win_close[i][0] < today) && (win_open[i][0] < today))){
+        problems.push(targets_names[i][0]);
+        valid = false;
+      }
+    }
+
+  return [valid, problems];
+};
 
 // This sorts the dates forms submitted in the Signup sheet, with the most recent submission on top.
 function sortBySubmission() {
   response_sheet.sort(1, false);
-}
+};
+
 
 // Convert not-Google-sheets files to Google sheets bc otherwise Google throws a fit. Source: user Tanaike on Stack Overflow
 function replaceSheet(fileID) {                                   
   const convertedFileId = Drive.Files.copy({ title: "temp", mimeType: MimeType.GOOGLE_SHEETS }, fileID, { supportsAllDrives: true }).id;
   target_submit_sheet = SpreadsheetApp.openById(convertedFileId);
-}
+};
+
 
 function getRefCode(date) {
   var date_obj = new Date(date); 
@@ -116,7 +175,8 @@ function getRefCode(date) {
   }
   var str = year.substr(2, 2) + semester + num;
   return str;
-} 
+};
+
 
 function determineSwitch(date) {
   var last_row = response_sheet.getLastRow();
@@ -138,7 +198,8 @@ function determineSwitch(date) {
     response_sheet.deleteRows(3, last_row);
     return getRefCode(date);                  // Return ref code with reset values 
   }
-}
+};
+
 
 function determineSemester(month) {
   switch(month) {
@@ -160,7 +221,8 @@ function determineSemester(month) {
     default:
       return "ERROR";
   }
-}
+};
+
 
 function sendEmail(name, email, success, msg, code) {     
   let text = "here";
@@ -193,6 +255,12 @@ function sendEmail(name, email, success, msg, code) {
         err_msg = "There was a discrepancy detected between the template sheet and the submitted sheet in the columns " + code + "which is preventing the program from parsing the targets. Please make sure to use the latest template sheet found <b>" + template_link + "</b> to ensure your submission can be processed correctly."
         break;
       }
+      case "Window Mismatch" : {
+        err_msg = "There was a discrepancy detected between the observing windows for the targets " + code + "which is preventing the program from parsing the targets. Please make sure that all observing windows have an opening date prior to their close date, these dates are at least one day apart, and both dates occur before the current date." +
+        "</br><br/>If you would like to resubmit your targets, the latest template sheet can be found <b>" + template_link + "</b>."
+        break;
+
+      }
       default: {
         err_msg = "For troubleshooting purposes, the error thrown by our parsing code was " + msg + ".";
         break;
@@ -208,9 +276,10 @@ function sendEmail(name, email, success, msg, code) {
     to: email, 
     subject: subj, 
     htmlBody: message});
-}
+};
 
 
+// If there is a column mismatch, figures out which columns are missing and returns array of strings of these columns
 function findDiff(correct_str, user_str) {
   let diff = [];
   let j = 0;
@@ -224,17 +293,18 @@ function findDiff(correct_str, user_str) {
     j++;
   }
   return diff;
-}
+};
+
 
 // This runs daily to clip out old targets
 function moveExpired(){
   const today = new Date();
-  var rows_num = master_sheet.getLastRow() - 2;
+  var rows_num = master_sheet.getLastRow() - UNUSED_ROWS_MAST;
   var last_row = master_sheet.getLastRow();
-  var dates_close = master_sheet.getSheetValues(3, 16, rows_num, 1);
+  var dates_close = master_sheet.getSheetValues(UNUSED_ROWS_MAST + 1, OBS_DATE_CLOSE_COL_NUM, rows_num, 1);
   var last_col = master_sheet.getLastColumn();
 
-  for (let i = last_row; i >= 3; i--) {
+  for (let i = last_row; i > UNUSED_ROWS_MAST; i--) {
     rows_num--;
     var date_close = dates_close[rows_num][0];
     // If target has expired (a.k.a. ability to observe it has passed), remove
@@ -245,8 +315,7 @@ function moveExpired(){
       master_sheet.deleteRows(i, 1);
     }
   }
-}
-
+};
 
 
 // -------------------------------------

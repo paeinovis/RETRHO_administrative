@@ -129,6 +129,7 @@ function dateCheck(num_targets) {
   var win_close = target_submit_sheet.getSheetValues(1 + UNUSED_ROWS_TEMP, OBS_DATE_CLOSE_COL_NUM, num_targets, 1);
   var targets_names = target_submit_sheet.getSheetValues(1 + UNUSED_ROWS_TEMP, TARGET_NAME_COL_NUM, num_targets, 1);
   const today = new Date();
+  today.setHours(0, 0, 0, 0);     // Set time to Zero because that is the time of the other dates generated from the sheets; that way, it won't get hissy if the timeframe is for the same night (if the target is being submitted for the night of submission)
 
     for (let i = 0; i < num_targets; i++) {
       // If window close happens before window opens, or if target has already expired
@@ -226,8 +227,8 @@ function determineSemester(month) {
 
 function sendEmail(name, email, success, msg, code) {     
   let text = "here";
-  let template_link = text.link("https://docs.google.com/spreadsheets/d/1jmg1gVpVr_TolXQAsdeYCSqASI9KLJXgMmgJZJXXG8Y/edit?usp=drive_link");
-  let submit_link = text.link("https://forms.gle/Tf1zrxuVezn6nU5c8");
+  let template_link = text.link("https://docs.google.com/spreadsheets/d/1jmg1gVpVr_TolXQAsdeYCSqASI9KLJXgMmgJZJXXG8Y/");
+  let submit_link = text.link("https://forms.gle/VkwyzR6BeNp3vJmf9");
 
   var subj;
   var message;
@@ -256,7 +257,7 @@ function sendEmail(name, email, success, msg, code) {
         break;
       }
       case "Window Mismatch" : {
-        err_msg = "There was a discrepancy detected between the observing windows for the targets " + code + "which is preventing the program from parsing the targets. Please make sure that all observing windows have an opening date prior to their close date, these dates are at least one day apart, and both dates occur before the current date." +
+        err_msg = "There was a discrepancy detected between the observing windows for the targets " + code + "which is preventing the program from parsing the targets. Please make sure that all observing windows have an opening date prior to their close date, these dates are at least one day apart, and both dates occur after the current date." +
         "</br><br/>If you would like to resubmit your targets, the latest template sheet can be found <b>" + template_link + "</b>."
         break;
 

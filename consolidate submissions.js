@@ -13,11 +13,14 @@ const EMAIL_COL_NUM = 3;
 const SHEET_LINK_COL_NUM = 4;
 const NUM_TARG_COL_NUM = 5;
 const ACCESS_COL_NUM = 6;
+const OBS_DATE_OPEN_COL_NUM = 15;
+const OBS_DATE_CLOSE_COL_NUM = 16;    // Column index of observing window close date
 
 // Columns for submitted sheet
 const TARGET_NAME_COL_NUM = 2;
-const OBS_DATE_OPEN_COL_NUM = 8;
-const OBS_DATE_CLOSE_COL_NUM = 9;    // Column index of observing window close date
+const OBS_DATE_OPEN_SUBMITTED_COL_NUM = 8;
+const OBS_DATE_CLOSE_SUBMITTED_COL_NUM = 9;
+
 
 var response_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Form Responses 1");    // Response sheet for the current semester
 var master_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("TargetMasterSheet");     // Parsed sheet
@@ -62,7 +65,7 @@ function consolidate() {
   }
   else if (!windows[0]) {
     var list_msg = windows[1];
-    var string_msg = "";
+    var string_msg = " ";
     for (let i = 0; i < list_msg.length; i++) {
       string_msg += list_msg[i];
       string_msg += ", ";
@@ -125,8 +128,8 @@ function storeTargets(date, name, email, num_targets, access) {
 function dateCheck(num_targets) {
   var valid = true;
   problems = [];
-  var win_open = target_submit_sheet.getSheetValues(1 + UNUSED_ROWS_TEMP, OBS_DATE_OPEN_COL_NUM, num_targets, 1);
-  var win_close = target_submit_sheet.getSheetValues(1 + UNUSED_ROWS_TEMP, OBS_DATE_CLOSE_COL_NUM, num_targets, 1);
+  var win_open = target_submit_sheet.getSheetValues(1 + UNUSED_ROWS_TEMP, OBS_DATE_OPEN_SUBMITTED_COL_NUM, num_targets, 1);
+  var win_close = target_submit_sheet.getSheetValues(1 + UNUSED_ROWS_TEMP, OBS_DATE_CLOSE_SUBMITTED_COL_NUM, num_targets, 1);
   var targets_names = target_submit_sheet.getSheetValues(1 + UNUSED_ROWS_TEMP, TARGET_NAME_COL_NUM, num_targets, 1);
   const today = new Date();
   today.setHours(0, 0, 0, 0);     // Set time to Zero because that is the time of the other dates generated from the sheets; that way, it won't get hissy if the timeframe is for the same night (if the target is being submitted for the night of submission)
@@ -301,6 +304,12 @@ function findDiff(correct_str, user_str) {
 function moveExpired(){
   const today = new Date();
   var rows_num = master_sheet.getLastRow() - UNUSED_ROWS_MAST;
+  
+  // If no targets to look at, do not run 
+  if (rows_num === 0) {
+    return;  
+  }
+
   var last_row = master_sheet.getLastRow();
   var dates_close = master_sheet.getSheetValues(UNUSED_ROWS_MAST + 1, OBS_DATE_CLOSE_COL_NUM, rows_num, 1);
   var last_col = master_sheet.getLastColumn();
